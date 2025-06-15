@@ -79,6 +79,16 @@ struct River {
 }
 
 impl River {
+    pub fn node(&self, i: isize) -> Option<Node> {
+        if self.closed {
+            Some(self.segments[i.rem_euclid(self.segments.len() as isize) as usize])
+        } else if i > 0 {
+            self.segments.get(i as usize).copied()
+        } else {
+            None
+        }
+    }
+
     pub fn draw(&self, draw: &Draw) {
         let points = self
             .segments
@@ -95,9 +105,9 @@ impl River {
     pub fn recompute(&mut self) {
         for i in 0..self.segments.len() {
             let (tangent, cross) = match (
-                self.segments.get(i.wrapping_sub(1)),
+                self.node(i as isize - 1),
                 self.segments[i],
-                self.segments.get(i + 1),
+                self.node(i as isize + 1),
             ) {
                 (None, _, None) => panic!("Nope!"),
                 (None, b, Some(c)) => ((c.loc - b.loc).normalize_or_zero(), 0.0),
