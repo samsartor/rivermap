@@ -48,31 +48,31 @@ fn view(app: &App, model: &Model, frame: Frame) {
             .wh(app.window_rect().wh())
             .rgba(1.0, 1.0, 1.0, 0.01);
     }
-    for x in range(-400.0, 400.0, 10.0) {
-        for y in range(-400.0, 400.0, 10.0) {
-            let height = model.heightmap.get(vec2(x, y));
-            draw.rect()
-                .wh(vec2(10.0, 10.0))
-                .xy(vec2(x, y))
-                .color(rgb(height, height, height));
-        }
-    }
+    // for x in range(-400.0, 400.0, 10.0) {
+    //     for y in range(-400.0, 400.0, 10.0) {
+    //         let height = model.heightmap.get(vec2(x, y));
+    //         draw.rect()
+    //             .wh(vec2(10.0, 10.0))
+    //             .xy(vec2(x, y))
+    //             .color(rgb(height, height, height));
+    //     }
+    // }
     model.draw(&draw);
-    for &Node {
-        tangent,
-        bitangent,
-        loc,
-    } in &model.river.segments
-    {
-        draw.arrow()
-            .start(loc)
-            .end(loc + tangent * 10.0)
-            .color(BLUE);
-        draw.arrow()
-            .start(loc)
-            .end(loc + bitangent * 10.0)
-            .color(RED);
-    }
+    // for &Node {
+    //     tangent,
+    //     bitangent,
+    //     loc,
+    // } in &model.river.segments
+    // {
+    //     draw.arrow()
+    //         .start(loc)
+    //         .end(loc + tangent * 10.0)
+    //         .color(BLUE);
+    //     draw.arrow()
+    //         .start(loc)
+    //         .end(loc + bitangent * 10.0)
+    //         .color(RED);
+    // }
 
     // Write the result of our drawing to the window's frame.
     draw.to_frame(app, &frame).unwrap();
@@ -92,9 +92,9 @@ impl Node {
         let left = heightmap.get(self.loc + vec2(0.0, -1.0));
         let right = heightmap.get(self.loc + vec2(0.0, 1.0));
         let grad = -vec2(up - down, right - left);
-        self.loc += (self.tangent * 1.0 + -self.bitangent * 2.0 + grad * 10.0)
-            * update.since_last.as_secs_f32()
-            * 10.0;
+        self.loc += (self.tangent * 3.0 + -self.bitangent * 2.0 + grad * 10.0)
+            // * update.since_last.as_secs_f32()
+            * 1.0;
     }
 }
 
