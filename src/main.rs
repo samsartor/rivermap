@@ -20,6 +20,7 @@ fn model(app: &App) -> Model {
 }
 
 pub fn update(_app: &App, model: &mut Model, _update: Update) {
+    model.river.recompute();
     // let noise = Perlin::new().set_seed(model.noise_seed);
     //
     // for agent in &mut model.agents {
@@ -44,6 +45,21 @@ fn view(app: &App, model: &Model, frame: Frame) {
             .rgba(1.0, 1.0, 1.0, 0.01);
     }
     model.draw(&draw);
+    for &Node {
+        tangent,
+        bitangent,
+        loc,
+    } in &model.river.segments
+    {
+        draw.arrow()
+            .start(loc)
+            .end(loc + tangent * 40.0)
+            .color(BLUE);
+        draw.arrow()
+            .start(loc)
+            .end(loc + bitangent * 40.0)
+            .color(RED);
+    }
 
     // Write the result of our drawing to the window's frame.
     draw.to_frame(app, &frame).unwrap();
@@ -52,6 +68,8 @@ fn view(app: &App, model: &Model, frame: Frame) {
 #[derive(Copy, Clone, Debug, Default)]
 struct Node {
     loc: Vec2,
+    tangent: Vec2,
+    bitangent: Vec2,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -66,11 +84,33 @@ impl River {
             .segments
             .iter()
             .copied()
-            .map(|Node { loc }| (loc, PINK));
+            .map(|Node { loc, .. }| (loc, PINK));
         if self.closed {
             draw.polyline().weight(5.0).points_colored_closed(points);
         } else {
             draw.polyline().weight(5.0).points_colored(points);
+        }
+    }
+
+    pub fn recompute(&mut self) {
+        for i in 0..self.segments.len() {
+            let (tangent, cross) = match (
+                self.segments.get(i.wrapping_sub(1)),
+                self.segments[i],
+                self.segments.get(i + 1),
+            ) {
+                (None, _, None) => panic!("Nope!"),
+                (None, b, Some(c)) => ((c.loc - b.loc).normalize_or_zero(), 0.0),
+                (Some(a), b, None) => ((b.loc - a.loc).normalize_or_zero(), 0.0),
+                (Some(a), b, Some(c)) => (
+                    (c.loc - a.loc).normalize_or_zero(),
+                    (b.loc - a.loc)
+                        .normalize_or_zero()
+                        .perp_dot((c.loc - b.loc).normalize_or_zero()),
+                ),
+            };
+            self.segments[i].tangent = tangent;
+            self.segments[i].bitangent = (tangent.perp() * cross).normalize_or_zero();
         }
     }
 }
@@ -104,6 +144,7 @@ fn apply_preset(model: &mut Model) {
                 let (x, y) = theta.sin_cos();
                 model.river.segments.push(Node {
                     loc: vec2(x * 0.3 * 720.0, y * 0.3 * 720.0),
+                    ..Default::default()
                 })
             }
         }
