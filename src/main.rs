@@ -15,16 +15,7 @@ fn model(app: &App) -> Model {
         .build()
         .unwrap();
     let mut model = Model::default();
-    for i in 0..100 {
-        let theta = (i as f32 / 100.0) * 2.0 * f32::consts::PI;
-        let (x, y) = theta.sin_cos();
-        model.river.segments.push(Node {
-            loc: vec2(
-                (x * 0.3 + 0.5) * 720.0 - 300.0,
-                (y * 0.3 + 0.5) * 720.0 - 300.0,
-            ),
-        })
-    }
+    apply_preset(&mut model);
     model
 }
 
@@ -66,6 +57,7 @@ struct Node {
 #[derive(Clone, Debug, Default)]
 struct River {
     segments: Vec<Node>,
+    closed: bool,
 }
 
 impl River {
@@ -75,18 +67,45 @@ impl River {
             .iter()
             .copied()
             .map(|Node { loc }| (loc, PINK));
-        draw.polyline().weight(5.0).points_colored(points);
+        if self.closed {
+            draw.polyline().weight(5.0).points_colored_closed(points);
+        } else {
+            draw.polyline().weight(5.0).points_colored(points);
+        }
     }
 }
 
 #[derive(Clone, Debug, Default)]
 struct Model {
     river: River,
+    preset: Preset,
     // TODO
 }
 
 impl Model {
     pub fn draw(&self, draw: &Draw) {
         self.river.draw(draw);
+    }
+}
+
+#[derive(Copy, Clone, Debug, Default)]
+pub enum Preset {
+    #[default]
+    CIRCLE,
+}
+
+fn apply_preset(model: &mut Model) {
+    model.river.segments.clear();
+    match model.preset {
+        Preset::CIRCLE => {
+            model.river.closed = true;
+            for i in 0..100 {
+                let theta = (i as f32 / 100.0) * 2.0 * f32::consts::PI;
+                let (x, y) = theta.sin_cos();
+                model.river.segments.push(Node {
+                    loc: vec2(x * 0.3 * 720.0, y * 0.3 * 720.0),
+                })
+            }
+        }
     }
 }
