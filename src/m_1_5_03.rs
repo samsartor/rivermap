@@ -163,7 +163,7 @@ fn view(app: &App, model: &Model, frame: Frame) {
     let draw = app.draw();
 
     if frame.nth() == 0 || app.keys.down.contains(&Key::Delete) {
-        draw.background().color(WHITE);
+        draw.background().color(BLUE);
     } else {
         draw.rect()
             .wh(app.window_rect().wh())
