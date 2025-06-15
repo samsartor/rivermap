@@ -1,4 +1,7 @@
-use nannou::prelude::*;
+use nannou::{
+    noise::{NoiseFn, Perlin},
+    prelude::*,
+};
 use std::f32;
 
 mod m_1_5_03;
@@ -19,8 +22,9 @@ fn model(app: &App) -> Model {
     model
 }
 
-pub fn update(_app: &App, model: &mut Model, _update: Update) {
+fn update(_app: &App, model: &mut Model, update: Update) {
     model.river.recompute();
+    model.river.step(update, &model.heightmap);
     // let noise = Perlin::new().set_seed(model.noise_seed);
     //
     // for agent in &mut model.agents {
@@ -38,11 +42,20 @@ fn view(app: &App, model: &Model, frame: Frame) {
     let draw = app.draw();
 
     if frame.nth() == 0 || app.keys.down.contains(&Key::Delete) {
-        draw.background().color(BLUE);
+        draw.background().color(WHITE);
     } else {
         draw.rect()
             .wh(app.window_rect().wh())
             .rgba(1.0, 1.0, 1.0, 0.01);
+    }
+    for x in range(-400.0, 400.0, 10.0) {
+        for y in range(-400.0, 400.0, 10.0) {
+            let height = model.heightmap.get(vec2(x, y));
+            draw.rect()
+                .wh(vec2(10.0, 10.0))
+                .xy(vec2(x, y))
+                .color(rgb(height, height, height));
+        }
     }
     model.draw(&draw);
     for &Node {
@@ -53,11 +66,11 @@ fn view(app: &App, model: &Model, frame: Frame) {
     {
         draw.arrow()
             .start(loc)
-            .end(loc + tangent * 40.0)
+            .end(loc + tangent * 10.0)
             .color(BLUE);
         draw.arrow()
             .start(loc)
-            .end(loc + bitangent * 40.0)
+            .end(loc + bitangent * 10.0)
             .color(RED);
     }
 
@@ -70,6 +83,19 @@ struct Node {
     loc: Vec2,
     tangent: Vec2,
     bitangent: Vec2,
+}
+
+impl Node {
+    pub fn step(&mut self, update: Update, heightmap: &Heightmap) {
+        let up = heightmap.get(self.loc + vec2(1.0, 0.0));
+        let down = heightmap.get(self.loc + vec2(-1.0, 0.0));
+        let left = heightmap.get(self.loc + vec2(0.0, -1.0));
+        let right = heightmap.get(self.loc + vec2(0.0, 1.0));
+        let grad = -vec2(up - down, right - left);
+        self.loc += (self.tangent + -self.bitangent * 0.1 + grad * 10.0)
+            * update.since_last.as_secs_f32()
+            * 10.0;
+    }
 }
 
 #[derive(Clone, Debug, Default)]
@@ -123,18 +149,35 @@ impl River {
             self.segments[i].bitangent = (tangent.perp() * cross).normalize_or_zero();
         }
     }
+
+    pub fn step(&mut self, update: Update, heightmap: &Heightmap) {
+        for node in &mut self.segments {
+            node.step(update, heightmap);
+        }
+    }
 }
 
 #[derive(Clone, Debug, Default)]
 struct Model {
     river: River,
     preset: Preset,
-    // TODO
+    heightmap: Heightmap,
 }
 
 impl Model {
     pub fn draw(&self, draw: &Draw) {
         self.river.draw(draw);
+    }
+}
+
+#[derive(Copy, Clone, Debug, Default)]
+struct Heightmap {
+    perlin: Perlin,
+}
+
+impl Heightmap {
+    pub fn get(&self, xy: Vec2) -> f32 {
+        self.perlin.get((xy.as_f64() / 100.0).to_array()) as f32
     }
 }
 
@@ -149,8 +192,8 @@ fn apply_preset(model: &mut Model) {
     match model.preset {
         Preset::CIRCLE => {
             model.river.closed = true;
-            for i in 0..100 {
-                let theta = (i as f32 / 100.0) * 2.0 * f32::consts::PI;
+            for i in 0..500 {
+                let theta = (i as f32 / 500.0) * 2.0 * f32::consts::PI;
                 let (x, y) = theta.sin_cos();
                 model.river.segments.push(Node {
                     loc: vec2(x * 0.3 * 720.0, y * 0.3 * 720.0),
@@ -159,4 +202,11 @@ fn apply_preset(model: &mut Model) {
             }
         }
     }
+}
+
+fn range(start: f32, threshold: f32, step_size: f32) -> impl Iterator<Item = f32> {
+    std::iter::successors(Some(start), move |&prev| {
+        let next = prev + step_size;
+        (next < threshold).then_some(next)
+    })
 }
