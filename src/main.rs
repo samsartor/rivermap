@@ -19,7 +19,10 @@ fn model(app: &App) -> Model {
         let theta = (i as f32 / 100.0) * 2.0 * f32::consts::PI;
         let (x, y) = theta.sin_cos();
         model.river.segments.push(Node {
-            loc: vec2((x * 0.3 + 0.5) * 720.0, (y * 0.3 + 0.5) * 720.0),
+            loc: vec2(
+                (x * 0.3 + 0.5) * 720.0 - 300.0,
+                (y * 0.3 + 0.5) * 720.0 - 300.0,
+            ),
         })
     }
     model
@@ -49,6 +52,7 @@ fn view(app: &App, model: &Model, frame: Frame) {
             .wh(app.window_rect().wh())
             .rgba(1.0, 1.0, 1.0, 0.01);
     }
+    model.draw(&draw);
 
     // Write the result of our drawing to the window's frame.
     draw.to_frame(app, &frame).unwrap();
@@ -64,8 +68,25 @@ struct River {
     segments: Vec<Node>,
 }
 
+impl River {
+    pub fn draw(&self, draw: &Draw) {
+        let points = self
+            .segments
+            .iter()
+            .copied()
+            .map(|Node { loc }| (loc, PINK));
+        draw.polyline().weight(5.0).points_colored(points);
+    }
+}
+
 #[derive(Clone, Debug, Default)]
 struct Model {
     river: River,
     // TODO
+}
+
+impl Model {
+    pub fn draw(&self, draw: &Draw) {
+        self.river.draw(draw);
+    }
 }
