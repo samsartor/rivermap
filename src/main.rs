@@ -92,7 +92,7 @@ impl Node {
         let left = heightmap.get(self.loc + vec2(0.0, -1.0));
         let right = heightmap.get(self.loc + vec2(0.0, 1.0));
         let grad = -vec2(up - down, right - left);
-        self.loc += (self.tangent + -self.bitangent * 0.1 + grad * 10.0)
+        self.loc += (self.tangent * 1.0 + -self.bitangent * 2.0 + grad * 10.0)
             * update.since_last.as_secs_f32()
             * 10.0;
     }
@@ -146,7 +146,41 @@ impl River {
                 ),
             };
             self.segments[i].tangent = tangent;
-            self.segments[i].bitangent = (tangent.perp() * cross).normalize_or_zero();
+            self.segments[i].bitangent = (tangent.perp() * cross.signum()).normalize_or_zero();
+        }
+        let mut new_bitangents = Vec::new();
+        for i in 0..self.segments.len() {
+            let mut new_bitangent = Vec2::ZERO;
+            let mut count = 0.0;
+
+            for j in -1..=1 {
+                if let Some(Node { bitangent, .. }) = self.node(i as isize + j) {
+                    count += 1.0;
+                    new_bitangent += bitangent;
+                }
+            }
+            new_bitangents.push(new_bitangent / count)
+        }
+        for (Node { bitangent, .. }, new_bitangent) in self.segments.iter_mut().zip(new_bitangents)
+        {
+            *bitangent = new_bitangent;
+        }
+
+        let mut new_locs = Vec::new();
+        for i in 0..self.segments.len() {
+            let mut new_loc = Vec2::ZERO;
+            let mut count = 0.0;
+
+            for j in -2..=2 {
+                if let Some(Node { loc, .. }) = self.node(i as isize + j) {
+                    count += 1.0;
+                    new_loc += loc;
+                }
+            }
+            new_locs.push(new_loc / count)
+        }
+        for (Node { loc, .. }, new_loc) in self.segments.iter_mut().zip(new_locs) {
+            *loc = new_loc;
         }
     }
 
