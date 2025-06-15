@@ -1,4 +1,5 @@
 use nannou::prelude::*;
+use std::f32;
 
 mod m_1_5_03;
 
@@ -13,7 +14,15 @@ fn model(app: &App) -> Model {
         // .key_released(key_released)
         .build()
         .unwrap();
-    Model::default()
+    let mut model = Model::default();
+    for i in 0..100 {
+        let theta = (i as f32 / 100.0) * 2.0 * f32::consts::PI;
+        let (x, y) = theta.sin_cos();
+        model.river.segments.push(Node {
+            loc: vec2((x * 0.3 + 0.5) * 720.0, (y * 0.3 + 0.5) * 720.0),
+        })
+    }
+    model
 }
 
 pub fn update(_app: &App, model: &mut Model, _update: Update) {
