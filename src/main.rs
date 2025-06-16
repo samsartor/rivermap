@@ -6,13 +6,20 @@ use std::f32;
 
 mod m_1_5_03;
 
+static WIDTH: u32 = 720;
+static HEIGHT: u32 = 720;
+static F_WIDTH: f32 = WIDTH as f32;
+static F_HEIGHT: f32 = HEIGHT as f32;
+static F_HEIGHT_H: f32 = F_HEIGHT / 2.0;
+static F_WIDTH_H: f32 = F_WIDTH / 2.0;
+
 fn main() {
     nannou::app(model).update(update).run();
 }
 
 fn model(app: &App) -> Model {
     app.new_window()
-        .size(720, 720)
+        .size(WIDTH, HEIGHT)
         .view(view)
         // .key_released(key_released)
         .build()
@@ -25,16 +32,6 @@ fn model(app: &App) -> Model {
 fn update(_app: &App, model: &mut Model, update: Update) {
     model.river.recompute();
     model.river.step(update, &model.heightmap);
-    // let noise = Perlin::new().set_seed(model.noise_seed);
-    //
-    // for agent in &mut model.agents {
-    //     match model.draw_mode {
-    //         1 => agent.update1(noise, model.noise_scale, model.noise_strength),
-    //         2 => agent.update2(noise, model.noise_scale, model.noise_strength),
-    //         _ => (),
-    //     }
-    //     agent.update(model.noise_z_velocity);
-    // }
 }
 
 fn view(app: &App, model: &Model, frame: Frame) {
@@ -92,9 +89,9 @@ impl Node {
         let left = heightmap.get(self.loc + vec2(0.0, -1.0));
         let right = heightmap.get(self.loc + vec2(0.0, 1.0));
         let grad = -vec2(up - down, right - left);
-        self.loc += (self.tangent * 3.0 + -self.bitangent * 2.0 + grad * 10.0)
-            // * update.since_last.as_secs_f32()
-            * 1.0;
+        self.loc += (self.tangent * 3.0 + -self.bitangent * 7.0 + grad * 10.0)
+            * update.since_last.as_secs_f32()
+            * 150.0;
     }
 }
 
@@ -148,23 +145,27 @@ impl River {
             self.segments[i].tangent = tangent;
             self.segments[i].bitangent = (tangent.perp() * cross.signum()).normalize_or_zero();
         }
-        let mut new_bitangents = Vec::new();
-        for i in 0..self.segments.len() {
-            let mut new_bitangent = Vec2::ZERO;
-            let mut count = 0.0;
-
-            for j in -1..=1 {
-                if let Some(Node { bitangent, .. }) = self.node(i as isize + j) {
-                    count += 1.0;
-                    new_bitangent += bitangent;
-                }
-            }
-            new_bitangents.push(new_bitangent / count)
-        }
-        for (Node { bitangent, .. }, new_bitangent) in self.segments.iter_mut().zip(new_bitangents)
-        {
-            *bitangent = new_bitangent;
-        }
+        // I commented this out just to see what would happen, and the results looked good although
+        // I think something janky is happening at a small scale. Feel free to uncomment and see
+        // what's up.
+        //
+        // let mut new_bitangents = Vec::new();
+        // for i in 0..self.segments.len() {
+        //     let mut new_bitangent = Vec2::ZERO;
+        //     let mut count = 0.0;
+        //
+        //     for j in -1..=1 {
+        //         if let Some(Node { bitangent, .. }) = self.node(i as isize + j) {
+        //             count += 1.0;
+        //             new_bitangent += bitangent;
+        //         }
+        //     }
+        //     new_bitangents.push(new_bitangent / count)
+        // }
+        // for (Node { bitangent, .. }, new_bitangent) in self.segments.iter_mut().zip(new_bitangents)
+        // {
+        //     *bitangent = new_bitangent;
+        // }
 
         let mut new_locs = Vec::new();
         for i in 0..self.segments.len() {
@@ -211,7 +212,15 @@ struct Heightmap {
 
 impl Heightmap {
     pub fn get(&self, xy: Vec2) -> f32 {
-        self.perlin.get((xy.as_f64() / 100.0).to_array()) as f32
+        if Heightmap::in_bounds(xy) {
+            self.perlin.get((xy.as_f64() / 100.0).to_array()) as f32
+        } else {
+            1.0
+        }
+    }
+
+    fn in_bounds(xy: Vec2) -> bool {
+        xy.x < F_WIDTH_H && xy.x > -F_WIDTH_H && xy.y < F_HEIGHT_H && xy.y > -F_HEIGHT_H
     }
 }
 
@@ -230,7 +239,7 @@ fn apply_preset(model: &mut Model) {
                 let theta = (i as f32 / 500.0) * 2.0 * f32::consts::PI;
                 let (x, y) = theta.sin_cos();
                 model.river.segments.push(Node {
-                    loc: vec2(x * 0.3 * 720.0, y * 0.3 * 720.0),
+                    loc: vec2(x * 0.3 * F_WIDTH, y * 0.3 * F_HEIGHT),
                     ..Default::default()
                 })
             }
