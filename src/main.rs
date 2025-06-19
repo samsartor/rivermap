@@ -2,7 +2,7 @@ use nannou::{
     noise::{NoiseFn, Perlin},
     prelude::*,
 };
-use std::f32;
+use std::{f32, iter::once, mem::take};
 
 mod m_1_5_03;
 
@@ -32,6 +32,7 @@ fn model(app: &App) -> Model {
 fn update(_app: &App, model: &mut Model, update: Update) {
     model.river.recompute();
     model.river.step(update, &model.heightmap);
+    model.river.distribute();
 }
 
 fn view(app: &App, model: &Model, frame: Frame) {
@@ -89,15 +90,17 @@ impl Node {
         let left = heightmap.get(self.loc + vec2(0.0, -1.0));
         let right = heightmap.get(self.loc + vec2(0.0, 1.0));
         let grad = -vec2(up - down, right - left);
-        self.loc += (self.tangent * 3.0 + -self.bitangent * 7.0 + grad * 10.0)
+        self.loc += (self.tangent * 3.0 + -self.bitangent * 7.0 + grad * 35.0)
             * update.since_last.as_secs_f32()
-            * 150.0;
+            * 3.0;
     }
 }
 
 #[derive(Clone, Debug, Default)]
 struct River {
+    start: Node,
     segments: Vec<Node>,
+    end: Node,
     closed: bool,
 }
 
@@ -112,11 +115,36 @@ impl River {
         }
     }
 
+    pub fn distribute(&mut self) {
+        let mut new_nodes = Vec::<Node>::new();
+        let mut at = self.start.loc;
+        let segments = take(&mut self.segments).into_iter();
+        let mut distance_to_next_point = 5.0;
+        for Node { loc: next, .. } in segments.chain(once(self.end)) {
+            while at.distance(next) > 0.01 {
+                let line = next - at;
+                let to_move = distance_to_next_point.min(line.length());
+                let moved = line * to_move / line.length();
+                at += moved;
+                distance_to_next_point -= to_move;
+                if distance_to_next_point <= 0.0 {
+                    new_nodes.push(Node {
+                        loc: at,
+                        ..Default::default()
+                    });
+                    distance_to_next_point = 5.0;
+                }
+            }
+        }
+
+        self.segments = new_nodes;
+    }
+
     pub fn draw(&self, draw: &Draw) {
-        let points = self
-            .segments
-            .iter()
-            .copied()
+        let segments = self.segments.iter().copied();
+        let points = once(self.start)
+            .chain(segments)
+            .chain(once(self.end))
             .map(|Node { loc, .. }| (loc, PINK));
         if self.closed {
             draw.polyline().weight(5.0).points_colored_closed(points);
@@ -127,21 +155,17 @@ impl River {
 
     pub fn recompute(&mut self) {
         for i in 0..self.segments.len() {
-            let (tangent, cross) = match (
-                self.node(i as isize - 1),
+            let (a, b, c) = (
+                self.node(i as isize - 1).unwrap_or(self.start),
                 self.segments[i],
-                self.node(i as isize + 1),
-            ) {
-                (None, _, None) => panic!("Nope!"),
-                (None, b, Some(c)) => ((c.loc - b.loc).normalize_or_zero(), 0.0),
-                (Some(a), b, None) => ((b.loc - a.loc).normalize_or_zero(), 0.0),
-                (Some(a), b, Some(c)) => (
-                    (c.loc - a.loc).normalize_or_zero(),
-                    (b.loc - a.loc)
-                        .normalize_or_zero()
-                        .perp_dot((c.loc - b.loc).normalize_or_zero()),
-                ),
-            };
+                self.node(i as isize + 1).unwrap_or(self.end),
+            );
+            let (tangent, cross) = (
+                (c.loc - a.loc).normalize_or_zero(),
+                (b.loc - a.loc)
+                    .normalize_or_zero()
+                    .perp_dot((c.loc - b.loc).normalize_or_zero()),
+            );
             self.segments[i].tangent = tangent;
             self.segments[i].bitangent = (tangent.perp() * cross.signum()).normalize_or_zero();
         }
@@ -154,7 +178,7 @@ impl River {
         //     let mut new_bitangent = Vec2::ZERO;
         //     let mut count = 0.0;
         //
-        //     for j in -1..=1 {
+        //     for j in -3..=3 {
         //         if let Some(Node { bitangent, .. }) = self.node(i as isize + j) {
         //             count += 1.0;
         //             new_bitangent += bitangent;
@@ -167,22 +191,22 @@ impl River {
         //     *bitangent = new_bitangent;
         // }
 
-        let mut new_locs = Vec::new();
-        for i in 0..self.segments.len() {
-            let mut new_loc = Vec2::ZERO;
-            let mut count = 0.0;
-
-            for j in -2..=2 {
-                if let Some(Node { loc, .. }) = self.node(i as isize + j) {
-                    count += 1.0;
-                    new_loc += loc;
-                }
-            }
-            new_locs.push(new_loc / count)
-        }
-        for (Node { loc, .. }, new_loc) in self.segments.iter_mut().zip(new_locs) {
-            *loc = new_loc;
-        }
+        // let mut new_locs = Vec::new();
+        // for i in 0..self.segments.len() {
+        //     let mut new_loc = Vec2::ZERO;
+        //     let mut count = 0.0;
+        //
+        //     for j in -2..=2 {
+        //         if let Some(Node { loc, .. }) = self.node(i as isize + j) {
+        //             count += 1.0;
+        //             new_loc += loc;
+        //         }
+        //     }
+        //     new_locs.push(new_loc / count)
+        // }
+        // for (Node { loc, .. }, new_loc) in self.segments.iter_mut().zip(new_locs) {
+        //     *loc = new_loc;
+        // }
     }
 
     pub fn step(&mut self, update: Update, heightmap: &Heightmap) {
@@ -238,10 +262,17 @@ fn apply_preset(model: &mut Model) {
             for i in 0..500 {
                 let theta = (i as f32 / 500.0) * 2.0 * f32::consts::PI;
                 let (x, y) = theta.sin_cos();
-                model.river.segments.push(Node {
+                let node = Node {
                     loc: vec2(x * 0.3 * F_WIDTH, y * 0.3 * F_HEIGHT),
                     ..Default::default()
-                })
+                };
+                if i == 0 {
+                    model.river.start = node;
+                } else if i == 499 {
+                    model.river.end = node;
+                } else {
+                    model.river.segments.push(node);
+                }
             }
         }
     }
