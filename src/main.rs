@@ -117,24 +117,50 @@ impl River {
 
     pub fn distribute(&mut self) {
         let mut new_nodes = Vec::<Node>::new();
-        let mut at = self.start.loc;
-        let segments = take(&mut self.segments).into_iter();
+        let mut at_loc = self.start.loc;
+        let mut at_ind = 0;
         let mut distance_to_next_point = 5.0;
-        for Node { loc: next, .. } in segments.chain(once(self.end)) {
-            while at.distance(next) > 0.01 {
-                let line = next - at;
-                let to_move = distance_to_next_point.min(line.length());
-                let moved = line * to_move / line.length();
-                at += moved;
-                distance_to_next_point -= to_move;
+        let collision_distance = 5.0;
+        while at_ind < self.segments.len() {
+            let next_ind = match self
+                .segments
+                .iter()
+                .enumerate()
+                .skip(at_ind + 1)
+                .rev()
+                .filter_map(|(other_ind, other_node)| {
+                    if (other_node.loc - at_loc).length_squared()
+                        < collision_distance * collision_distance
+                    {
+                        Some(other_ind)
+                    } else {
+                        None
+                    }
+                })
+                .next()
+            {
+                Some(found) => found,
+                None => at_ind + 1,
+            };
+            let next_node = self.node(next_ind as isize).unwrap_or(self.end);
+            let mut line = next_node.loc - at_loc;
+            let mut still_to_go = line.length();
+            line /= still_to_go;
+            while still_to_go > 0.01 {
+                let step_by = distance_to_next_point.min(still_to_go);
+                let moved = line * step_by;
+                at_loc += moved;
+                still_to_go -= step_by;
+                distance_to_next_point -= step_by;
                 if distance_to_next_point <= 0.0 {
                     new_nodes.push(Node {
-                        loc: at,
+                        loc: at_loc,
                         ..Default::default()
                     });
                     distance_to_next_point = 5.0;
                 }
             }
+            at_ind = next_ind;
         }
 
         self.segments = new_nodes;
@@ -250,8 +276,9 @@ impl Heightmap {
 
 #[derive(Copy, Clone, Debug, Default)]
 pub enum Preset {
-    #[default]
     CIRCLE,
+    #[default]
+    ACROSS,
 }
 
 fn apply_preset(model: &mut Model) {
@@ -264,6 +291,25 @@ fn apply_preset(model: &mut Model) {
                 let (x, y) = theta.sin_cos();
                 let node = Node {
                     loc: vec2(x * 0.3 * F_WIDTH, y * 0.3 * F_HEIGHT),
+                    ..Default::default()
+                };
+                if i == 0 {
+                    model.river.start = node;
+                } else if i == 499 {
+                    model.river.end = node;
+                } else {
+                    model.river.segments.push(node);
+                }
+            }
+        }
+        Preset::ACROSS => {
+            model.river.closed = false;
+            for i in 0..500 {
+                let t = (i as f32 / 500.0) * 2.0 - 1.0;
+                let x = t;
+                let y = 0.1 * (t * 20.0).sin();
+                let node = Node {
+                    loc: vec2(x * F_WIDTH_H, y * F_HEIGHT_H),
                     ..Default::default()
                 };
                 if i == 0 {
