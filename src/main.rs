@@ -1,6 +1,7 @@
 use nannou::noise::{Fbm, MultiFractal, NoiseFn, Perlin};
 use nannou::prelude::*;
 use std::f32;
+use std::time::Duration;
 
 mod m_1_5_03;
 mod river;
@@ -31,7 +32,8 @@ fn model(app: &App) -> Model {
     model
 }
 
-fn update(_app: &App, model: &mut Model, update: Update) {
+fn update(_app: &App, model: &mut Model, mut update: Update) {
+    update.since_last = update.since_last.min(Duration::from_millis(200));
     model.river.recompute();
     model.river.step(update, &model.heightmap);
     model.river.distribute();
