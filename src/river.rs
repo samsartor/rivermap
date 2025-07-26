@@ -1,15 +1,11 @@
 use crate::{Heightmap, SLOWDOWN};
-use lyon::path::traits::PathBuilder;
-use lyon::tessellation as tes;
-use nannou::draw::mesh::MeshBuilder;
-use nannou::draw::mesh::builder::{ColorPerPoint, SingleColor};
-use nannou::draw::{Drawing, Mesh};
+use lyon::tessellation::{self as tes, GeometryBuilder};
 use nannou::prelude::*;
 use nannou::{event::Update, glam::Vec2};
-use std::iter::once;
-use tes::{GeometryBuilder, StrokeTessellator};
+use tes::StrokeTessellator;
 
-pub static MIN_DISTANCE: f32 = 5.0;
+pub static MIN_DISTANCE: f32 = 15.0;
+pub static POINT_SPACING: f32 = 5.0;
 
 #[derive(Copy, Clone, Debug, Default)]
 pub struct Node {
@@ -52,6 +48,7 @@ pub struct River {
     pub segments: Vec<Node>,
     pub end: Node,
     pub closed: bool,
+    pub river_builder: RiverMeshBuilder,
 }
 
 impl River {
@@ -67,8 +64,10 @@ impl River {
         let mut new_nodes = Vec::<Node>::new();
         let mut at_loc = self.start.loc;
         let mut at_ind = 0;
-        let mut distance_to_next_point = MIN_DISTANCE;
+        let mut distance_to_next_point = POINT_SPACING;
         let collision_distance = MIN_DISTANCE + 0.1;
+        dbg!(self.segments.len());
+        // dbg!(self.segments.iter().zip(.());
         while at_ind < self.segments.len() {
             let next_ind = self
                 .segments
@@ -77,7 +76,11 @@ impl River {
                 .skip(at_ind + 1)
                 .rev()
                 .find_map(|(other_ind, other_node)| {
-                    if (other_node.loc - at_loc).length_squared()
+                    let ind_diff = at_ind.abs_diff(other_ind);
+                    let close_margin = (MIN_DISTANCE / POINT_SPACING).ceil() as usize * 2;
+                    if ind_diff < close_margin {
+                        None
+                    } else if (other_node.loc - at_loc).length_squared()
                         < collision_distance * collision_distance
                     {
                         Some(other_ind)
@@ -103,7 +106,7 @@ impl River {
                         bitangent: vec2(f32::NAN, f32::NAN),
                         color: next_node.color,
                     });
-                    distance_to_next_point = MIN_DISTANCE;
+                    distance_to_next_point = POINT_SPACING;
                 }
             }
             at_ind = next_ind;
@@ -113,12 +116,14 @@ impl River {
     }
 
     pub fn recompute(&mut self) {
+        let mut average = 0.0;
         for i in 0..self.segments.len() {
             let (a, b, c) = (
                 self.node(i as isize - 1).unwrap_or(self.start),
                 self.segments[i],
                 self.node(i as isize + 1).unwrap_or(self.end),
             );
+            average += b.loc.distance(a.loc);
             let (tangent, cross) = (
                 (c.loc - a.loc).normalize_or_zero(),
                 (b.loc - a.loc)
@@ -128,6 +133,7 @@ impl River {
             self.segments[i].tangent = tangent;
             self.segments[i].bitangent = (tangent.perp() * cross.signum()).normalize_or_zero();
         }
+        dbg!(average / self.segments.len() as f32);
     }
 
     pub fn step(&mut self, update: Update, heightmap: &Heightmap) {
@@ -136,13 +142,8 @@ impl River {
         }
     }
 
-    pub fn draw(&self, draw: &Draw, widthmap: &Heightmap) {
-        let mut river_builder = RiverMeshBuilder {
-            vertices: Vec::new(),
-            indicies: Vec::new(),
-            left_bank: Vec::new(),
-            right_bank: Vec::new(),
-        };
+    pub fn tesselate(&mut self, widthmap: &Heightmap) {
+        self.river_builder.abort_geometry();
 
         let getwidth = |p| widthmap.get(p) * 10.0 + 15.0;
         let mut path_builder = lyon::path::Path::builder_with_attributes(5);
@@ -166,16 +167,47 @@ impl River {
             let mut opts = tes::StrokeOptions::default();
             opts.variable_line_width = Some(0);
             tessellator
-                .tessellate_path(&path, &opts, &mut river_builder)
+                .tessellate_path(&path, &opts, &mut self.river_builder)
                 .unwrap();
         }
+    }
 
+    pub fn draw_fill(&self, draw: &Draw) {
         draw.mesh()
-            .indexed_colored(river_builder.vertices, river_builder.indicies)
+            .indexed_colored(
+                self.river_builder.vertices.iter().copied(),
+                self.river_builder.indicies.iter().copied(),
+            )
             .finish();
+    }
+
+    pub fn draw_for_history(&self, draw: &Draw) {
+        draw.mesh()
+            .indexed(
+                self.river_builder.vertices.iter().map(|p| p.0),
+                self.river_builder.indicies.iter().copied(),
+            )
+            .hsl(random(), 0.7, 0.2)
+            .finish();
+    }
+
+    pub fn draw_border(&self, draw: &Draw) {
+        let line = draw.polyline().weight(2.0).color(BLACK);
+        if self.closed {
+            line.points(self.river_builder.left_bank.iter().map(|p| p.1));
+        } else {
+            line.points(self.river_builder.left_bank.iter().map(|p| p.1));
+        }
+        let line = draw.polyline().weight(2.0).color(BLACK);
+        if self.closed {
+            line.points(self.river_builder.right_bank.iter().map(|p| p.1));
+        } else {
+            line.points(self.river_builder.right_bank.iter().map(|p| p.1));
+        }
     }
 }
 
+#[derive(Debug, Default, Clone)]
 pub struct RiverMeshBuilder {
     vertices: Vec<(Vec3, LinSrgba)>,
     indicies: Vec<usize>,
