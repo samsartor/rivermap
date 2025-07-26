@@ -89,7 +89,7 @@ struct Model {
 
 impl Model {
     pub fn draw(&self, draw: &Draw) {
-        self.river.draw(draw);
+        self.river.draw_dumb(draw);
     }
 }
 
@@ -114,8 +114,8 @@ impl Heightmap {
 
 #[derive(Copy, Clone, Debug, Default)]
 pub enum Preset {
-    #[default]
     CIRCLE,
+    #[default]
     ACROSS,
 }
 
@@ -133,6 +133,7 @@ fn apply_preset(model: &mut Model) {
                 let (x, y) = theta.sin_cos();
                 let node = river::Node {
                     loc: vec2(x * radius, y * radius),
+                    width: 10.0,
                     ..Default::default()
                 };
                 if i == 0 {
@@ -152,6 +153,7 @@ fn apply_preset(model: &mut Model) {
                 let y = 0.1 * (t * 20.0).sin();
                 let node = river::Node {
                     loc: vec2(x * F_WIDTH_H, y * F_HEIGHT_H),
+                    width: 10.0,
                     ..Default::default()
                 };
                 if i == 0 {

@@ -1,8 +1,13 @@
-use std::iter::once;
-
 use crate::{Heightmap, SLOWDOWN};
+use lyon::path::traits::PathBuilder;
+use lyon::tessellation as tes;
+use nannou::draw::mesh::MeshBuilder;
+use nannou::draw::mesh::builder::{ColorPerPoint, SingleColor};
+use nannou::draw::{Drawing, Mesh};
 use nannou::prelude::*;
 use nannou::{event::Update, glam::Vec2};
+use std::iter::once;
+use tes::{GeometryBuilder, StrokeTessellator};
 
 pub static MIN_DISTANCE: f32 = 5.0;
 
@@ -11,6 +16,8 @@ pub struct Node {
     pub loc: Vec2,
     pub tangent: Vec2,
     pub bitangent: Vec2,
+    pub color: LinSrgba,
+    pub width: f32,
 }
 
 impl Node {
@@ -24,6 +31,19 @@ impl Node {
         // self.loc += (self.tangent * 3.0 + -self.bitangent * 7.0 + grad * 35.0)
             * (update.since_last.as_secs_f32() - SLOWDOWN)
             * 3.0;
+    }
+
+    pub fn lyonize<T>(&self, func: impl FnOnce(lyon::path::math::Point, &[f32]) -> T) -> T {
+        func(
+            tes::geom::point(self.loc.x, self.loc.y),
+            &[
+                self.color.red,
+                self.color.green,
+                self.color.blue,
+                self.color.alpha,
+                self.width,
+            ],
+        )
     }
 }
 
@@ -80,7 +100,10 @@ impl River {
                 if distance_to_next_point <= 0.0 {
                     new_nodes.push(Node {
                         loc: at_loc,
-                        ..Default::default()
+                        tangent: vec2(f32::NAN, f32::NAN),
+                        bitangent: vec2(f32::NAN, f32::NAN),
+                        color: next_node.color,
+                        width: next_node.width,
                     });
                     distance_to_next_point = MIN_DISTANCE;
                 }
@@ -131,5 +154,91 @@ impl River {
         for node in &mut self.segments {
             node.step(update, heightmap);
         }
+    }
+
+    pub fn draw_dumb(&self, draw: &Draw) {
+        let mut mesh = Mesh::default();
+        let fill_builder = MeshBuilder::color_per_point(&mut mesh, Mat4::default());
+        let mut river_builder = RiverMeshBuilder {
+            fill_builder,
+            left_bank: Vec::new(),
+            right_bank: Vec::new(),
+        };
+
+        let mut path_builder = lyon::path::Path::builder_with_attributes(5);
+        let start_id = self.start.lyonize(|p, a| path_builder.begin(p, a));
+        for p in &self.segments {
+            p.lyonize(|p, a| {
+                path_builder.line_to(p, a);
+            });
+        }
+        self.end.lyonize(|p, a| {
+            path_builder.line_to(p, a);
+        });
+        path_builder.end(self.closed);
+        let path = path_builder.build();
+        dbg!(path.attributes(start_id));
+
+        {
+            let mut tessellator = StrokeTessellator::new();
+            tessellator
+                .tessellate_path(&path, &tes::StrokeOptions::default(), &mut river_builder)
+                .unwrap();
+        }
+
+        draw.mesh()
+            .indexed_colored(
+                mesh.vertices().map(|vert| (vert.vertex.vertex, vert.color)),
+                mesh.indices().iter().map(|x| *x as usize),
+            )
+            .finish();
+    }
+}
+
+pub struct RiverMeshBuilder<'a> {
+    fill_builder: MeshBuilder<'a, ColorPerPoint>,
+    left_bank: Vec<(f32, Vec2)>,
+    right_bank: Vec<(f32, Vec2)>,
+}
+
+impl<'a> tes::GeometryBuilder for RiverMeshBuilder<'a> {
+    fn add_triangle(&mut self, a: tes::VertexId, b: tes::VertexId, c: tes::VertexId) {
+        tes::GeometryBuilder::add_triangle(&mut self.fill_builder, a, b, c);
+    }
+
+    fn begin_geometry(&mut self) {
+        tes::GeometryBuilder::begin_geometry(&mut self.fill_builder);
+    }
+
+    fn end_geometry(&mut self) -> tes::Count {
+        self.left_bank
+            .sort_by(|(t_a, _), (t_b, _)| t_a.partial_cmp(t_b).unwrap());
+        self.right_bank
+            .sort_by(|(t_a, _), (t_b, _)| t_a.partial_cmp(t_b).unwrap());
+        tes::GeometryBuilder::end_geometry(&mut self.fill_builder)
+    }
+
+    fn abort_geometry(&mut self) {
+        tes::GeometryBuilder::abort_geometry(&mut self.fill_builder)
+    }
+}
+
+impl<'a> tes::StrokeGeometryBuilder for RiverMeshBuilder<'a> {
+    fn add_stroke_vertex(
+        &mut self,
+        vertex: tes::StrokeVertex,
+    ) -> Result<tes::VertexId, tes::GeometryBuilderError> {
+        let t = vertex.advancement();
+        let pos = vertex.position();
+        let pos = vec2(pos.x, pos.y);
+        match vertex.side() {
+            tes::Side::Left => {
+                self.left_bank.push((t, pos));
+            }
+            tes::Side::Right => {
+                self.right_bank.push((t, pos));
+            }
+        }
+        tes::StrokeGeometryBuilder::add_stroke_vertex(&mut self.fill_builder, vertex)
     }
 }
