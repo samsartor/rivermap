@@ -1,7 +1,5 @@
-use nannou::{
-    noise::{NoiseFn, Perlin},
-    prelude::*,
-};
+use nannou::noise::{Fbm, MultiFractal, NoiseFn, Perlin};
+use nannou::prelude::*;
 use std::f32;
 
 mod m_1_5_03;
@@ -85,17 +83,26 @@ struct Model {
     river: river::River,
     preset: Preset,
     heightmap: Heightmap,
+    widthmap: Heightmap,
 }
 
 impl Model {
     pub fn draw(&self, draw: &Draw) {
-        self.river.draw_dumb(draw);
+        self.river.draw(draw, &self.widthmap);
     }
 }
 
-#[derive(Copy, Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 struct Heightmap {
-    perlin: Perlin,
+    perlin: Fbm,
+}
+
+impl Default for Heightmap {
+    fn default() -> Self {
+        Heightmap {
+            perlin: Fbm::new().set_octaves(4),
+        }
+    }
 }
 
 impl Heightmap {
@@ -133,7 +140,7 @@ fn apply_preset(model: &mut Model) {
                 let (x, y) = theta.sin_cos();
                 let node = river::Node {
                     loc: vec2(x * radius, y * radius),
-                    width: 10.0,
+                    color: lin_srgba(1.0, 0.2, 0.2, 1.0),
                     ..Default::default()
                 };
                 if i == 0 {
@@ -153,7 +160,7 @@ fn apply_preset(model: &mut Model) {
                 let y = 0.1 * (t * 20.0).sin();
                 let node = river::Node {
                     loc: vec2(x * F_WIDTH_H, y * F_HEIGHT_H),
-                    width: 10.0,
+                    color: lin_srgba(1.0, 0.2, 0.2, 1.0),
                     ..Default::default()
                 };
                 if i == 0 {

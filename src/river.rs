@@ -17,7 +17,6 @@ pub struct Node {
     pub tangent: Vec2,
     pub bitangent: Vec2,
     pub color: LinSrgba,
-    pub width: f32,
 }
 
 impl Node {
@@ -33,10 +32,16 @@ impl Node {
             * 3.0;
     }
 
-    pub fn lyonize<T>(&self, func: impl FnOnce(lyon::path::math::Point, &[f32]) -> T) -> T {
-        func(
+    pub fn lyonize(&self, width: f32) -> (lyon::path::math::Point, impl AsRef<[f32]>) {
+        (
             tes::geom::point(self.loc.x, self.loc.y),
-            &[1.0, 0.0, 0.0, 1.0, 10.0],
+            [
+                width,
+                self.color.red,
+                self.color.green,
+                self.color.blue,
+                self.color.alpha,
+            ],
         )
     }
 }
@@ -97,7 +102,6 @@ impl River {
                         tangent: vec2(f32::NAN, f32::NAN),
                         bitangent: vec2(f32::NAN, f32::NAN),
                         color: next_node.color,
-                        width: next_node.width,
                     });
                     distance_to_next_point = MIN_DISTANCE;
                 }
@@ -106,24 +110,6 @@ impl River {
         }
 
         self.segments = new_nodes;
-    }
-
-    pub fn draw(&self, draw: &Draw) {
-        let segments = self.segments.iter().copied();
-        let points = once(self.start)
-            .chain(segments)
-            .chain(once(self.end))
-            .map(|Node { loc, .. }| (loc, PINK));
-        let line = draw.polyline().weight(MIN_DISTANCE);
-        if self.closed {
-            line.points_colored_closed(points);
-        } else {
-            line.points_colored(points);
-        }
-        // Does calling sleep(0.0) still trigger os stuff?
-        if SLOWDOWN != 0.0 {
-            std::thread::sleep(std::time::Duration::from_secs_f32(SLOWDOWN));
-        }
     }
 
     pub fn recompute(&mut self) {
@@ -150,7 +136,7 @@ impl River {
         }
     }
 
-    pub fn draw_dumb(&self, draw: &Draw) {
+    pub fn draw(&self, draw: &Draw, widthmap: &Heightmap) {
         let mut river_builder = RiverMeshBuilder {
             vertices: Vec::new(),
             indicies: Vec::new(),
@@ -158,23 +144,27 @@ impl River {
             right_bank: Vec::new(),
         };
 
+        let getwidth = |p| widthmap.get(p) * 10.0 + 15.0;
         let mut path_builder = lyon::path::Path::builder_with_attributes(5);
-        self.start.lyonize(|p, a| path_builder.begin(p, a));
-        for p in &self.segments {
-            p.lyonize(|p, a| {
-                path_builder.line_to(p, a);
-            });
+        {
+            let (p, a) = self.start.lyonize(getwidth(self.start.loc));
+            path_builder.begin(p, a.as_ref());
         }
-        self.end.lyonize(|p, a| {
-            path_builder.line_to(p, a);
-        });
+        for p in &self.segments {
+            let (p, a) = p.lyonize(getwidth(p.loc));
+            path_builder.line_to(p, a.as_ref());
+        }
+        {
+            let (p, a) = self.end.lyonize(getwidth(self.end.loc));
+            path_builder.line_to(p, a.as_ref());
+        }
         path_builder.end(self.closed);
         let path = path_builder.build();
 
         {
             let mut tessellator = StrokeTessellator::new();
             let mut opts = tes::StrokeOptions::default();
-            opts.variable_line_width = Some(4);
+            opts.variable_line_width = Some(0);
             tessellator
                 .tessellate_path(&path, &opts, &mut river_builder)
                 .unwrap();
@@ -236,7 +226,7 @@ impl tes::StrokeGeometryBuilder for RiverMeshBuilder {
         let i = self.vertices.len() as u32;
         let p = vec3(vertex.position().x, vertex.position().y, 0.0);
         let a = vertex.interpolated_attributes();
-        self.vertices.push((p, lin_srgba(a[0], a[1], a[2], a[3])));
+        self.vertices.push((p, lin_srgba(a[1], a[2], a[3], a[4])));
         Ok(tes::VertexId(i))
     }
 }
