@@ -48,7 +48,7 @@ fn view(app: &App, model: &Model, frame: Frame) {
     } else {
         draw.rect()
             .wh(app.window_rect().wh())
-            .rgba(1.0, 1.0, 1.0, 0.51);
+            .rgba(1.0, 1.0, 1.0, 0.01);
     }
     // for x in range(-400.0, 400.0, 10.0) {
     //     for y in range(-400.0, 400.0, 10.0) {

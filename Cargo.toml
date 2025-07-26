@@ -4,5 +4,5 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-lyon = "0.17"
+lyon = "1.0"
 nannou = "0.19.0"
