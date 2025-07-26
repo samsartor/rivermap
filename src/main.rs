@@ -2,7 +2,7 @@ use nannou::{
     noise::{NoiseFn, Perlin},
     prelude::*,
 };
-use std::{f32, iter::once, mem::take};
+use std::{f32, iter::once};
 
 mod m_1_5_03;
 
@@ -13,11 +13,15 @@ static F_HEIGHT: f32 = HEIGHT as f32;
 static F_HEIGHT_H: f32 = F_HEIGHT / 2.0;
 static F_WIDTH_H: f32 = F_WIDTH / 2.0;
 
+static SLOWDOWN: f32 = 0.0;
+static MIN_DISTANCE: f32 = 5.0;
+
 fn main() {
     nannou::app(model).update(update).run();
 }
 
 fn model(app: &App) -> Model {
+    app.set_exit_on_escape(true);
     app.new_window()
         .size(WIDTH, HEIGHT)
         .view(view)
@@ -44,7 +48,7 @@ fn view(app: &App, model: &Model, frame: Frame) {
     } else {
         draw.rect()
             .wh(app.window_rect().wh())
-            .rgba(1.0, 1.0, 1.0, 0.01);
+            .rgba(1.0, 1.0, 1.0, 0.51);
     }
     // for x in range(-400.0, 400.0, 10.0) {
     //     for y in range(-400.0, 400.0, 10.0) {
@@ -90,8 +94,9 @@ impl Node {
         let left = heightmap.get(self.loc + vec2(0.0, -1.0));
         let right = heightmap.get(self.loc + vec2(0.0, 1.0));
         let grad = -vec2(up - down, right - left);
-        self.loc += (self.tangent * 3.0 + -self.bitangent * 7.0 + grad * 35.0)
-            * update.since_last.as_secs_f32()
+        self.loc += (self.tangent * 0.0 + -self.bitangent * 0.0 + grad * 35.0)
+        // self.loc += (self.tangent * 3.0 + -self.bitangent * 7.0 + grad * 35.0)
+            * (update.since_last.as_secs_f32() - SLOWDOWN)
             * 3.0;
     }
 }
@@ -106,9 +111,7 @@ struct River {
 
 impl River {
     pub fn node(&self, i: isize) -> Option<Node> {
-        if self.closed {
-            Some(self.segments[i.rem_euclid(self.segments.len() as isize) as usize])
-        } else if i > 0 {
+        if i > 0 {
             self.segments.get(i as usize).copied()
         } else {
             None
@@ -119,16 +122,16 @@ impl River {
         let mut new_nodes = Vec::<Node>::new();
         let mut at_loc = self.start.loc;
         let mut at_ind = 0;
-        let mut distance_to_next_point = 5.0;
-        let collision_distance = 5.0;
+        let mut distance_to_next_point = MIN_DISTANCE;
+        let collision_distance = MIN_DISTANCE + 0.1;
         while at_ind < self.segments.len() {
-            let next_ind = match self
+            let next_ind = self
                 .segments
                 .iter()
                 .enumerate()
                 .skip(at_ind + 1)
                 .rev()
-                .filter_map(|(other_ind, other_node)| {
+                .find_map(|(other_ind, other_node)| {
                     if (other_node.loc - at_loc).length_squared()
                         < collision_distance * collision_distance
                     {
@@ -137,11 +140,7 @@ impl River {
                         None
                     }
                 })
-                .next()
-            {
-                Some(found) => found,
-                None => at_ind + 1,
-            };
+                .unwrap_or(at_ind + 1);
             let next_node = self.node(next_ind as isize).unwrap_or(self.end);
             let mut line = next_node.loc - at_loc;
             let mut still_to_go = line.length();
@@ -157,7 +156,7 @@ impl River {
                         loc: at_loc,
                         ..Default::default()
                     });
-                    distance_to_next_point = 5.0;
+                    distance_to_next_point = MIN_DISTANCE;
                 }
             }
             at_ind = next_ind;
@@ -172,10 +171,15 @@ impl River {
             .chain(segments)
             .chain(once(self.end))
             .map(|Node { loc, .. }| (loc, PINK));
+        let line = draw.polyline().weight(MIN_DISTANCE);
         if self.closed {
-            draw.polyline().weight(5.0).points_colored_closed(points);
+            line.points_colored_closed(points);
         } else {
-            draw.polyline().weight(5.0).points_colored(points);
+            line.points_colored(points);
+        }
+        // Does calling sleep(0.0) still trigger os stuff?
+        if SLOWDOWN != 0.0 {
+            std::thread::sleep(std::time::Duration::from_secs_f32(SLOWDOWN));
         }
     }
 
@@ -195,44 +199,6 @@ impl River {
             self.segments[i].tangent = tangent;
             self.segments[i].bitangent = (tangent.perp() * cross.signum()).normalize_or_zero();
         }
-        // I commented this out just to see what would happen, and the results looked good although
-        // I think something janky is happening at a small scale. Feel free to uncomment and see
-        // what's up.
-        //
-        // let mut new_bitangents = Vec::new();
-        // for i in 0..self.segments.len() {
-        //     let mut new_bitangent = Vec2::ZERO;
-        //     let mut count = 0.0;
-        //
-        //     for j in -3..=3 {
-        //         if let Some(Node { bitangent, .. }) = self.node(i as isize + j) {
-        //             count += 1.0;
-        //             new_bitangent += bitangent;
-        //         }
-        //     }
-        //     new_bitangents.push(new_bitangent / count)
-        // }
-        // for (Node { bitangent, .. }, new_bitangent) in self.segments.iter_mut().zip(new_bitangents)
-        // {
-        //     *bitangent = new_bitangent;
-        // }
-
-        // let mut new_locs = Vec::new();
-        // for i in 0..self.segments.len() {
-        //     let mut new_loc = Vec2::ZERO;
-        //     let mut count = 0.0;
-        //
-        //     for j in -2..=2 {
-        //         if let Some(Node { loc, .. }) = self.node(i as isize + j) {
-        //             count += 1.0;
-        //             new_loc += loc;
-        //         }
-        //     }
-        //     new_locs.push(new_loc / count)
-        // }
-        // for (Node { loc, .. }, new_loc) in self.segments.iter_mut().zip(new_locs) {
-        //     *loc = new_loc;
-        // }
     }
 
     pub fn step(&mut self, update: Update, heightmap: &Heightmap) {
@@ -276,8 +242,8 @@ impl Heightmap {
 
 #[derive(Copy, Clone, Debug, Default)]
 pub enum Preset {
-    CIRCLE,
     #[default]
+    CIRCLE,
     ACROSS,
 }
 
@@ -285,17 +251,21 @@ fn apply_preset(model: &mut Model) {
     model.river.segments.clear();
     match model.preset {
         Preset::CIRCLE => {
-            model.river.closed = true;
-            for i in 0..500 {
-                let theta = (i as f32 / 500.0) * 2.0 * f32::consts::PI;
+            // model.river.closed = true;
+            let smaller_side = F_WIDTH.min(F_HEIGHT);
+            let radius = 0.3 * smaller_side;
+            let circumference = radius * 2.0 * PI;
+            let num_steps = (circumference / MIN_DISTANCE).ceil() as usize;
+            for i in 0..num_steps {
+                let theta = (i as f32 / num_steps as f32) * 2.0 * f32::consts::PI;
                 let (x, y) = theta.sin_cos();
                 let node = Node {
-                    loc: vec2(x * 0.3 * F_WIDTH, y * 0.3 * F_HEIGHT),
+                    loc: vec2(x * radius, y * radius),
                     ..Default::default()
                 };
                 if i == 0 {
                     model.river.start = node;
-                } else if i == 499 {
+                } else if i == num_steps - 1 {
                     model.river.end = node;
                 } else {
                     model.river.segments.push(node);
