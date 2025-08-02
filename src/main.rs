@@ -4,7 +4,7 @@ use nannou::prelude::*;
 use nannou::wgpu::{BlendComponent, BlendFactor, BlendOperation};
 use std::cell::Cell;
 use std::f32;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use crate::compositor::Compositor;
 use crate::render::Render;
@@ -47,9 +47,6 @@ fn update(_app: &App, model: &mut Model, mut update: Update) {
     model.river.step(update, &model.heightmap);
     model.river.distribute();
     model.river.tesselate(&model.widthmap);
-    model
-        .time_since_last_history
-        .update(|last| last + update.since_last);
 }
 
 fn view(app: &App, model: &Model, mut frame: Frame) {
@@ -102,7 +99,7 @@ struct Model {
     river_history: Render,
     border: Render,
     fill: Render,
-    time_since_last_history: Cell<Duration>,
+    last_history_at: Cell<Instant>,
     compositor: Compositor,
 }
 
@@ -119,7 +116,7 @@ impl Model {
             preset: Preset::default(),
             heightmap: Heightmap::new(random(), 100.0),
             widthmap: Heightmap::new(random(), 50.0),
-            time_since_last_history: Cell::new(Duration::ZERO),
+            last_history_at: Cell::new(Instant::now()),
             river_history,
             border,
             fill,
@@ -128,14 +125,15 @@ impl Model {
     }
 
     pub fn draw(&self, _draw: &Draw, app: &App, frame: &mut Frame) {
-        let history_fade = 0.001;
+        let history_fade = 0.1;
         let snapshot_every = 0.5;
-        let snapshot_frac = self.time_since_last_history.get().as_secs_f32() / snapshot_every;
+        let snapshot_frac = self.last_history_at.get().elapsed().as_secs_f32() / snapshot_every;
         self.river_history
             .render_frame(app, frame, |size, history| {
                 if frame.nth() == 0 {
                     history.rect().wh(size).rgba(1.0, 1.0, 1.0, 1.0);
-                } else {
+                }
+                if snapshot_frac > 1.0 {
                     history
                         .blend(BlendComponent {
                             src_factor: BlendFactor::SrcAlpha,
@@ -145,10 +143,8 @@ impl Model {
                         .rect()
                         .wh(app.main_window().rect().wh())
                         .rgba(1.0, 1.0, 1.0, history_fade);
-                }
-                if frame.nth() == 0 || snapshot_frac > 1.0 {
                     self.river.draw_for_history(history);
-                    self.time_since_last_history.set(Duration::ZERO);
+                    self.last_history_at.set(Instant::now());
                 }
             });
 
