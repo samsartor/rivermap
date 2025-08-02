@@ -21,12 +21,28 @@ fn main(@location(0) tex_coords: vec2<f32>) -> FragmentOutput {
 
 fn history_color(tex_coords: vec2<f32>) -> vec4<f32> {
     let age = textureSample(history_tex, tex_sampler, tex_coords).r;
-    let hex_center = pointy_hex_to_pixel(round(pixel_to_pointy_hex(tex_coords)));
-    let dist = length(tex_coords - hex_center);
-    if dist < (0.5 * size) || age > 0.99 {
+    let color = gradient(age);
+    let pattern = u32(age * 10.0) % 3u;
+    if age > 0.99 {
         return vec4(0.0, 0.0, 0.0, 0.0);
+    }
+    if pattern == 0u {
+        return vec4(color, 1.0);
+    } else if pattern == 1u {
+        let hex_center = pointy_hex_to_pixel(round(pixel_to_pointy_hex(tex_coords)));
+        let dist = length(tex_coords - hex_center);
+        if dist < (0.5 * size) {
+            return vec4(0.0, 0.0, 0.0, 0.0);
+        } else {
+            return vec4(color, 1.0);
+        }
     } else {
-        return vec4(gradient(age), 1.0);
+        let t = fract((tex_coords.x - tex_coords.y) / (size * 2.0 * sqrt(2.0)));
+        if t < 0.5 {
+            return vec4(0.0, 0.0, 0.0, 0.0);
+        } else {
+            return vec4(color, 1.0);
+        }
     }
 }
 
@@ -98,12 +114,12 @@ fn oklch_to_srgb(oklch: vec3<f32>) -> vec3<f32> {
 const num_grad_stops: u32 = 3u;
 
 fn gradient(pos: f32) -> vec3<f32> {
-    var grad_stops: array<vec3<f32>, num_grad_stops> = array(
+    var grad_stops = array<vec3<f32>, num_grad_stops>(
         vec3(0.7, 0.1135, 48.18),
         vec3(0.7, 0.1135, 139.41),
         vec3(0.7, 0.1135, 239.82),
     );
-    
+
     let pos_mul = clamp(pos, 0.0, 1.0) * f32(num_grad_stops);
     let t = fract(pos_mul);
     let i = u32(pos_mul);
