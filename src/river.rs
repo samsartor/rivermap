@@ -182,7 +182,7 @@ impl River {
                 self.river_builder.vertices.iter().map(|p| p.0),
                 self.river_builder.indicies.iter().copied(),
             )
-            .hsl(random(), 0.7, 0.2)
+            .rgba(0.0, 0.0, 0.0, 1.0)
             .finish();
     }
 
