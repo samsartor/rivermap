@@ -1,9 +1,10 @@
 use nannou::color::IntoLinSrgba;
 use nannou::noise::{Fbm, MultiFractal, NoiseFn, Seedable};
 use nannou::prelude::*;
-use nannou::wgpu::Texture;
+use nannou::wgpu::{BlendComponent, BlendFactor, BlendOperation, Texture};
 use std::cell::Cell;
 use std::f32;
+use std::ops::DerefMut;
 use std::time::Duration;
 
 use crate::river::River;
@@ -127,6 +128,9 @@ impl Model {
         }
     }
     pub fn draw(&self, draw: &Draw, window: &Window, frame: &mut Frame) {
+        let history_fade = 0.001;
+        let snapshot_every = 0.5;
+        let snapshot_frac = self.time_since_last_history.get().as_secs_f32() / snapshot_every;
         let descriptor = self.river_history.descriptor();
         let mut renderer = nannou::draw::RendererBuilder::new()
             .build_from_texture_descriptor(window.device(), descriptor);
@@ -138,11 +142,16 @@ impl Model {
                 .rgba(1.0, 1.0, 1.0, 1.0);
         } else {
             history
+                .blend(BlendComponent {
+                    src_factor: BlendFactor::SrcAlpha,
+                    dst_factor: BlendFactor::One,
+                    operation: BlendOperation::Add,
+                })
                 .rect()
                 .wh(window.rect().wh())
-                .rgba(1.0, 1.0, 1.0, 0.001);
+                .rgba(1.0, 1.0, 1.0, history_fade);
         }
-        if self.time_since_last_history.get().as_secs_f32() > 0.5 {
+        if frame.nth() == 0 || snapshot_frac > 1.0 {
             self.river.draw_for_history(&history);
             self.time_since_last_history.set(Duration::ZERO);
         }
