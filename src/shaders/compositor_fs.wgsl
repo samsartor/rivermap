@@ -13,10 +13,20 @@ var tex_sampler: sampler;
 
 @fragment
 fn main(@location(0) tex_coords: vec2<f32>) -> FragmentOutput {
-    let history: vec4<f32> = textureSample(history_tex, tex_sampler, tex_coords);
+    let history: vec4<f32> = history_color(tex_coords);
     let fill: vec4<f32> = textureSample(fill_tex, tex_sampler, tex_coords);
     let border: vec4<f32> = textureSample(border_tex, tex_sampler, tex_coords);
-    return FragmentOutput(alpha_over(border, alpha_over(fill, history)));
+    return FragmentOutput(alpha_over(border, alpha_over(fill, alpha_over(history, vec4(1.0, 1.0, 1.0, 1.0)))));
+}
+
+fn history_color(tex_coords: vec2<f32>) -> vec4<f32> {
+    let dist = length(fract(tex_coords * 100.0) - 0.5);
+    let sampled = textureSample(history_tex, tex_sampler, tex_coords);
+    if dist < 0.2 {
+        return vec4(0.0, 0.0, 0.0, 0.0);
+    } else {
+        return sampled;
+    }
 }
 
 fn alpha_over(fg: vec4<f32>, bg: vec4<f32>) -> vec4<f32> {

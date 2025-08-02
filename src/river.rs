@@ -66,8 +66,6 @@ impl River {
         let mut at_ind = 0;
         let mut distance_to_next_point = POINT_SPACING;
         let collision_distance = MIN_DISTANCE + 0.1;
-        dbg!(self.segments.len());
-        // dbg!(self.segments.iter().zip(.());
         while at_ind < self.segments.len() {
             let next_ind = self
                 .segments
@@ -116,14 +114,12 @@ impl River {
     }
 
     pub fn recompute(&mut self) {
-        let mut average = 0.0;
         for i in 0..self.segments.len() {
             let (a, b, c) = (
                 self.node(i as isize - 1).unwrap_or(self.start),
                 self.segments[i],
                 self.node(i as isize + 1).unwrap_or(self.end),
             );
-            average += b.loc.distance(a.loc);
             let (tangent, cross) = (
                 (c.loc - a.loc).normalize_or_zero(),
                 (b.loc - a.loc)
@@ -133,7 +129,6 @@ impl River {
             self.segments[i].tangent = tangent;
             self.segments[i].bitangent = (tangent.perp() * cross.signum()).normalize_or_zero();
         }
-        dbg!(average / self.segments.len() as f32);
     }
 
     pub fn step(&mut self, update: Update, heightmap: &Heightmap) {
