@@ -20,25 +20,32 @@ fn main(@location(0) tex_coords: vec2<f32>) -> FragmentOutput {
 }
 
 fn history_color(tex_coords: vec2<f32>) -> vec4<f32> {
-    let age = textureSample(history_tex, tex_sampler, tex_coords).r;
-    let color = gradient(age);
-    let pattern = u32(age * 10.0) % 3u;
-    if age > 0.99 {
+    let lookup = textureSample(history_tex, tex_sampler, tex_coords);
+    let age = lookup.r * 255.0;
+    // let offset = tex_coords + age * vec2(0.318374, 0.73492);
+    let offset = tex_coords;
+    let is_border = lookup.g;
+    let color = gradient(age / 20.0);
+    let pattern = u32(age) % 6u;
+    if age > 20.0 {
         return vec4(0.0, 0.0, 0.0, 0.0);
     }
-    if pattern == 0u {
+    if is_border > 0.99 {
+        return vec4(mix(color, vec3(0.0, 0.0, 0.0), 0.5), 1.0);
+    }
+    if pattern < 2u {
         return vec4(color, 1.0);
-    } else if pattern == 1u {
-        let hex_center = pointy_hex_to_pixel(round(pixel_to_pointy_hex(tex_coords)));
-        let dist = length(tex_coords - hex_center);
-        if dist < (0.5 * size) {
+    } else if pattern < 4u {
+        let hex_center = pointy_hex_to_pixel(round(pixel_to_pointy_hex(offset)));
+        let dist = length(offset - hex_center);
+        if (dist < (0.5 * size)) != (pattern == 3u) {
             return vec4(0.0, 0.0, 0.0, 0.0);
         } else {
             return vec4(color, 1.0);
         }
     } else {
-        let t = fract((tex_coords.x - tex_coords.y) / (size * 2.0 * sqrt(2.0)));
-        if t < 0.5 {
+        let t = fract((offset.x - offset.y) / (size * 2.0 * sqrt(2.0)));
+        if (t < 0.5) != (pattern == 5u) {
             return vec4(0.0, 0.0, 0.0, 0.0);
         } else {
             return vec4(color, 1.0);
@@ -111,12 +118,13 @@ fn oklch_to_srgb(oklch: vec3<f32>) -> vec3<f32> {
     );
 }
 
-const num_grad_stops: u32 = 3u;
+const num_grad_stops: u32 = 4u;
 
 fn gradient(pos: f32) -> vec3<f32> {
     var grad_stops = array<vec3<f32>, num_grad_stops>(
         vec3(0.7, 0.1135, 48.18),
-        vec3(0.7, 0.1135, 139.41),
+        vec3(0.7, 0.1135, 130.41),
+        vec3(0.7, 0.1135, 140.41),
         vec3(0.7, 0.1135, 239.82),
     );
 

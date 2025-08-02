@@ -184,6 +184,18 @@ impl River {
             )
             .rgba(0.0, 0.0, 0.0, 1.0)
             .finish();
+        let line = draw.polyline().weight(1.0).rgba(0.0, 1.0, 0.0, 1.0);
+        if self.closed {
+            line.points(self.river_builder.left_bank.iter().map(|p| p.1));
+        } else {
+            line.points(self.river_builder.left_bank.iter().map(|p| p.1));
+        }
+        let line = draw.polyline().weight(1.0).rgba(0.0, 1.0, 0.0, 1.0);
+        if self.closed {
+            line.points(self.river_builder.right_bank.iter().map(|p| p.1));
+        } else {
+            line.points(self.river_builder.right_bank.iter().map(|p| p.1));
+        }
     }
 
     pub fn draw_border(&self, draw: &Draw) {

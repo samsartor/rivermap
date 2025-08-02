@@ -125,7 +125,7 @@ impl Model {
     }
 
     pub fn draw(&self, _draw: &Draw, app: &App, frame: &mut Frame) {
-        let history_fade = 0.1;
+        let history_fade = 1.0 / 255.0;
         let snapshot_every = 0.5;
         let snapshot_frac = self.last_history_at.get().elapsed().as_secs_f32() / snapshot_every;
         self.river_history
@@ -142,7 +142,7 @@ impl Model {
                         })
                         .rect()
                         .wh(app.main_window().rect().wh())
-                        .rgba(1.0, 1.0, 1.0, history_fade);
+                        .rgba(1.0, 0.0, 0.0, history_fade);
                     self.river.draw_for_history(history);
                     self.last_history_at.set(Instant::now());
                 }
