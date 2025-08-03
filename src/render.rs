@@ -13,7 +13,7 @@ pub struct Render {
 impl Render {
     pub fn new(app: &App) -> Self {
         let texture = TextureBuilder::new()
-            .size([WIDTH, HEIGHT])
+            .size([WIDTH * 2, HEIGHT * 2])
             // Our texture will be used as the RENDER_ATTACHMENT for our `Draw` render pass.
             // It will also be SAMPLED by the `TextureCapturer` and `TextureResizer`.
             .usage(wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING)
@@ -30,9 +30,9 @@ impl Render {
         let window = app.main_window();
         let mut renderer = nannou::draw::RendererBuilder::new()
             .build_from_texture_descriptor(window.device(), self.texture.descriptor());
-        let draw = Draw::new();
-        let size = app.main_window().rect().wh();
-        action(size, &draw);
+        let draw = Draw::new().scale(2.0);
+        let [w, h] = self.texture.size();
+        action(vec2(w as f32, h as f32), &draw);
         renderer.render_to_texture(
             window.device(),
             &mut frame.command_encoder(),

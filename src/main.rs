@@ -32,6 +32,7 @@ fn model(app: &App) -> Model {
     app.set_exit_on_escape(true);
     app.new_window()
         .size(WIDTH, HEIGHT)
+        .msaa_samples(4)
         .view(view)
         // .key_released(key_released)
         .build()
@@ -141,7 +142,7 @@ impl Model {
                             operation: BlendOperation::Add,
                         })
                         .rect()
-                        .wh(app.main_window().rect().wh())
+                        .wh(size)
                         .rgba(1.0, 0.0, 0.0, history_fade);
                     self.river.draw_for_history(history);
                     self.last_history_at.set(Instant::now());
