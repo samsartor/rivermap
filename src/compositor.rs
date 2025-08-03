@@ -22,14 +22,8 @@ impl Compositor {
         let vs_mod = device.create_shader_module(vs_desc);
         let fs_mod = device.create_shader_module(fs_desc);
 
-        let sampler_desc = wgpu::SamplerBuilder::new()
-            .mag_filter(wgpu::FilterMode::Nearest)
-            .min_filter(wgpu::FilterMode::Nearest)
-            .into_descriptor();
-        let sampler_filtering = wgpu::sampler_filtering(&sampler_desc);
-        let sampler = device.create_sampler(&sampler_desc);
-        let bind_group_layout = create_bind_group_layout(device, textures, sampler_filtering);
-        let bind_group = create_bind_group(device, &bind_group_layout, textures, &sampler);
+        let bind_group_layout = create_bind_group_layout(device, textures);
+        let bind_group = create_bind_group(device, &bind_group_layout, textures);
         let pipeline_layout = create_pipeline_layout(device, &bind_group_layout);
         let render_pipeline = create_render_pipeline(
             device,
@@ -57,7 +51,11 @@ impl Compositor {
     pub fn draw(&self, frame: &Frame) {
         let mut encoder = frame.command_encoder();
         let mut render_pass = wgpu::RenderPassBuilder::new()
-            .color_attachment(frame.texture_view(), |color| color)
+            .color_attachment(frame.texture_view(), |color| {
+                color
+                    .resolve_target(frame.resolve_target())
+                    .load_op(wgpu::LoadOp::Load)
+            })
             .begin(&mut encoder);
         render_pass.set_bind_group(0, &self.bind_group, &[]);
         render_pass.set_pipeline(&self.render_pipeline);
@@ -71,27 +69,23 @@ impl Compositor {
 fn create_bind_group_layout(
     device: &wgpu::Device,
     texture_sample_type: &[&Render],
-    sampler_filtering: bool,
 ) -> wgpu::BindGroupLayout {
     let mut layout_builder = wgpu::BindGroupLayoutBuilder::new();
     for texture in texture_sample_type {
         layout_builder = layout_builder.texture(
             wgpu::ShaderStages::FRAGMENT,
-            false,
+            true,
             wgpu::TextureViewDimension::D2,
             texture.texture.view().build().sample_type(),
         );
     }
-    layout_builder
-        .sampler(wgpu::ShaderStages::FRAGMENT, sampler_filtering)
-        .build(device)
+    layout_builder.build(device)
 }
 
 fn create_bind_group(
     device: &wgpu::Device,
     layout: &wgpu::BindGroupLayout,
     textures: &[&Render],
-    sampler: &wgpu::Sampler,
 ) -> wgpu::BindGroup {
     let mut group_builder = wgpu::BindGroupBuilder::new();
     let built = textures
@@ -101,7 +95,7 @@ fn create_bind_group(
     for texture in &built {
         group_builder = group_builder.texture_view(texture);
     }
-    group_builder.sampler(sampler).build(device, layout)
+    group_builder.build(device, layout)
 }
 
 fn create_pipeline_layout(

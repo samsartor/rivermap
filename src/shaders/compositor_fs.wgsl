@@ -3,24 +3,30 @@ struct FragmentOutput {
 };
 
 @group(0) @binding(0)
-var history_tex: texture_2d<f32>;
+var history_tex: texture_multisampled_2d<f32>;
 @group(0) @binding(1)
-var border_tex: texture_2d<f32>;
+var border_tex: texture_multisampled_2d<f32>;
 @group(0) @binding(2)
-var fill_tex: texture_2d<f32>;
-@group(0) @binding(3)
-var tex_sampler: sampler;
+var fill_tex: texture_multisampled_2d<f32>;
 
 @fragment
-fn main(@location(0) tex_coords: vec2<f32>) -> FragmentOutput {
-    let history: vec4<f32> = history_color(tex_coords);
-    let fill: vec4<f32> = textureSample(fill_tex, tex_sampler, tex_coords);
-    let border: vec4<f32> = textureSample(border_tex, tex_sampler, tex_coords);
+fn main(
+    @location(0) tex_coords: vec2<f32>,
+    @builtin(sample_index) sample_index: u32,
+) -> FragmentOutput {
+    let tex_size: vec2<u32> = textureDimensions(history_tex);
+    let tex_x: i32 = i32(f32(tex_size.x) * tex_coords.x);
+    let tex_y: i32 = i32(f32(tex_size.y) * tex_coords.y);;
+    let itex_coords: vec2<i32> = vec2<i32>(tex_x, tex_y);
+
+    var history: vec4<f32> = textureLoad(history_tex, itex_coords, i32(sample_index));
+    history = history_color(tex_coords, history);
+    let fill: vec4<f32> = textureLoad(fill_tex, itex_coords, i32(sample_index));
+    let border: vec4<f32> = textureLoad(border_tex, itex_coords, i32(sample_index));
     return FragmentOutput(alpha_over(border, alpha_over(fill, alpha_over(history, vec4(1.0, 1.0, 1.0, 1.0)))));
 }
 
-fn history_color(tex_coords: vec2<f32>) -> vec4<f32> {
-    let lookup = textureSample(history_tex, tex_sampler, tex_coords);
+fn history_color(tex_coords: vec2<f32>, lookup: vec4<f32>) -> vec4<f32> {
     let age = lookup.r * 255.0;
     // let offset = tex_coords + age * vec2(0.318374, 0.73492);
     let offset = tex_coords;

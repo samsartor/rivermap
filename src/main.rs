@@ -34,12 +34,22 @@ fn model(app: &App) -> Model {
         .size(WIDTH, HEIGHT)
         .msaa_samples(4)
         .view(view)
+        .resized(resized)
         // .key_released(key_released)
         .build()
         .unwrap();
     let mut model = Model::new(app);
     apply_preset(&mut model);
     model
+}
+
+fn resized(app: &App, model: &mut Model, _size: Vec2) {
+    model.river_history = Render::new(app);
+    model.border = Render::new(app);
+    model.fill = Render::new(app);
+    let textures = [&model.river_history, &model.border, &model.fill];
+    model.compositor = Compositor::new(app, &textures);
+    model.last_history_at.set(None);
 }
 
 fn update(_app: &App, model: &mut Model, mut update: Update) {
@@ -53,14 +63,6 @@ fn update(_app: &App, model: &mut Model, mut update: Update) {
 fn view(app: &App, model: &Model, mut frame: Frame) {
     // Begin drawing
     let draw = app.draw();
-
-    if frame.nth() == 0 || app.keys.down.contains(&Key::Delete) {
-        draw.background().color(WHITE);
-    } else {
-        draw.rect()
-            .wh(app.window_rect().wh())
-            .rgba(1.0, 1.0, 1.0, 1.0);
-    }
     // for x in range(-400.0, 400.0, 10.0) {
     //     for y in range(-400.0, 400.0, 10.0) {
     //         let height = model.heightmap.get(vec2(x, y));
@@ -88,7 +90,7 @@ fn view(app: &App, model: &Model, mut frame: Frame) {
     // }
 
     // Write the result of our drawing to the window's frame.
-    // draw.to_frame(app, &frame).unwrap();
+    draw.to_frame(app, &frame).unwrap();
 }
 
 #[derive(Debug)]
@@ -100,7 +102,7 @@ struct Model {
     river_history: Render,
     border: Render,
     fill: Render,
-    last_history_at: Cell<Instant>,
+    last_history_at: Cell<Option<Instant>>,
     compositor: Compositor,
 }
 
@@ -117,7 +119,7 @@ impl Model {
             preset: Preset::default(),
             heightmap: Heightmap::new(random(), 100.0),
             widthmap: Heightmap::new(random(), 50.0),
-            last_history_at: Cell::new(Instant::now()),
+            last_history_at: Cell::new(None),
             river_history,
             border,
             fill,
@@ -125,16 +127,19 @@ impl Model {
         }
     }
 
-    pub fn draw(&self, _draw: &Draw, app: &App, frame: &mut Frame) {
+    pub fn draw(&self, draw: &Draw, app: &App, frame: &mut Frame) {
         let history_fade = 1.0 / 255.0;
         let snapshot_every = 0.5;
-        let snapshot_frac = self.last_history_at.get().elapsed().as_secs_f32() / snapshot_every;
+        let snapshot_frac = self
+            .last_history_at
+            .get()
+            .map(|at| at.elapsed().as_secs_f32() / snapshot_every);
         self.river_history
             .render_frame(app, frame, |size, history| {
-                if frame.nth() == 0 {
+                if snapshot_frac.is_none() {
                     history.rect().wh(size).rgba(1.0, 1.0, 1.0, 1.0);
                 }
-                if snapshot_frac > 1.0 {
+                if snapshot_frac.is_none_or(|f| f > 1.0) {
                     history
                         .blend(BlendComponent {
                             src_factor: BlendFactor::SrcAlpha,
@@ -145,7 +150,7 @@ impl Model {
                         .wh(size)
                         .rgba(1.0, 0.0, 0.0, history_fade);
                     self.river.draw_for_history(history);
-                    self.last_history_at.set(Instant::now());
+                    self.last_history_at.set(Some(Instant::now()));
                 }
             });
 
