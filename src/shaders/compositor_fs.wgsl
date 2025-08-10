@@ -21,9 +21,10 @@ fn main(
 
     var history: vec4<f32> = textureLoad(history_tex, itex_coords, i32(sample_index));
     history = history_color(tex_coords, history);
-    let fill: vec4<f32> = textureLoad(fill_tex, itex_coords, i32(sample_index));
+    let paper = paper(tex_coords);
+    let fill: vec4<f32> = paper * textureLoad(fill_tex, itex_coords, i32(sample_index)).a;
     let border: vec4<f32> = textureLoad(border_tex, itex_coords, i32(sample_index));
-    return FragmentOutput(alpha_over(border, alpha_over(fill, alpha_over(history, paper(tex_coords)))));
+    return FragmentOutput(alpha_over(border, alpha_over(fill, alpha_over(history, paper))));
 }
 
 fn paper(loc: vec2<f32>) -> vec4<f32> {

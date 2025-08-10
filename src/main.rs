@@ -235,7 +235,7 @@ fn apply_preset(model: &mut Model) {
                 let y = 0.1 * (t * 20.0).sin();
                 let node = river::Node {
                     loc: vec2(x * F_WIDTH_H + 0.1, y * F_HEIGHT_H),
-                    color: WHITE.into_lin_srgba(),
+                    color: lin_srgba(0.0, 0.0, 0.0, 1.0),
                     // color: lin_srgba(1.0, 0.2, 0.2, 1.0),
                     ..Default::default()
                 };
