@@ -1,4 +1,3 @@
-use nannou::color::IntoLinSrgba;
 use nannou::noise::{Fbm, MultiFractal, NoiseFn, Seedable};
 use nannou::prelude::*;
 use nannou::wgpu::{BlendComponent, BlendFactor, BlendOperation};
@@ -11,7 +10,6 @@ use crate::render::Render;
 use crate::river::River;
 
 mod compositor;
-mod m_1_5_03;
 mod render;
 mod river;
 

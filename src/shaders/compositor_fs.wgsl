@@ -33,7 +33,7 @@ fn paper(loc: vec2<f32>) -> vec4<f32> {
     let large = (keep_over(simplex2d(loc * 10.0), 0.5) - 0.5) * 0.5;
     let many = min(normal_range(simplex2d(loc * 100.0)), normal_range(simplex2d(loc * 100.0 + 100.0))) * 0.7;
     let darken = clamp(large + many, 0.0, 1.0);
-    let folded = fold(loc.x, 5.0) + fold(loc.y, 4.0);
+    let folded = max(fold(loc.x, 4.0), fold(loc.y, 3.0));
     let shifted = mix(color, darkest, min(folded, 1.0) + darken);
 
     return vec4(oklch_to_lin(shifted), 1.0);
@@ -41,7 +41,7 @@ fn paper(loc: vec2<f32>) -> vec4<f32> {
 
 fn fold(loc: f32, num_folds: f32) -> f32 {
     let dist = abs(fract(loc * num_folds) - 0.5) * 2.0;
-    let lines = pow(200.0, dist) / 200.0;
+    let lines = pow(20000000.0, dist) / 20000000.0;
     return lines * 1.0;
 }
 
