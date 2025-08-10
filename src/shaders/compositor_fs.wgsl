@@ -16,14 +16,63 @@ fn main(
 ) -> FragmentOutput {
     let tex_size: vec2<u32> = textureDimensions(history_tex);
     let tex_x: i32 = i32(f32(tex_size.x) * tex_coords.x);
-    let tex_y: i32 = i32(f32(tex_size.y) * tex_coords.y);;
+    let tex_y: i32 = i32(f32(tex_size.y) * tex_coords.y);
     let itex_coords: vec2<i32> = vec2<i32>(tex_x, tex_y);
 
     var history: vec4<f32> = textureLoad(history_tex, itex_coords, i32(sample_index));
     history = history_color(tex_coords, history);
     let fill: vec4<f32> = textureLoad(fill_tex, itex_coords, i32(sample_index));
     let border: vec4<f32> = textureLoad(border_tex, itex_coords, i32(sample_index));
-    return FragmentOutput(alpha_over(border, alpha_over(fill, alpha_over(history, vec4(1.0, 1.0, 1.0, 1.0)))));
+    return FragmentOutput(alpha_over(border, alpha_over(fill, alpha_over(history, paper(tex_coords)))));
+}
+
+fn paper(loc: vec2<f32>) -> vec4<f32> {
+    let color = vec3(0.8386, 0.052, 84.51);
+    let darkest = vec3(0.7920, 0.057, 85.00);
+    let large = (keep_over(simplex2d(loc * 10.0), 0.5) - 0.5) * 0.5;
+    let many = min(normal_range(simplex2d(loc * 100.0)), normal_range(simplex2d(loc * 100.0 + 100.0))) * 0.7;
+    let darken = clamp(large + many, 0.0, 1.0);
+    let folded = fold(loc.x, 5.0) + fold(loc.y, 4.0);
+    let shifted = mix(color, darkest, min(folded, 1.0) + darken);
+
+    return vec4(oklch_to_lin(shifted), 1.0);
+}
+
+fn fold(loc: f32, num_folds: f32) -> f32 {
+    let dist = abs(fract(loc * num_folds) - 0.5) * 2.0;
+    let lines = pow(200.0, dist) / 200.0;
+    return lines * 1.0;
+}
+
+fn keep_over(keep: f32, over: f32) -> f32 {
+    if keep >= over {
+        return keep;
+    } else {
+        return 0.0;
+    }
+}
+
+fn normal_range(in: f32) -> f32 {
+    return (in + 1.0) / 2.0;
+}
+
+// Next two copied from https://www.shadertoy.com/view/Msf3WH
+fn hash(p: vec2<f32>) -> vec2<f32> {
+    let p2 = vec2(dot(p, vec2(127.1, 311.7)), dot(p, vec2(269.5, 183.3)));
+    return -1.0 + 2.0 * fract(sin(p2) * 43758.5453123);
+}
+
+fn simplex2d(p: vec2<f32>) -> f32 {
+    let K1 = 0.366025404; // (sqrt(3)-1)/2;
+    let K2 = 0.211324865; // (3-sqrt(3))/6;
+    let i = floor(p + (p.x + p.y) * K1);
+    let a = p - i + (i.x + i.y) * K2;
+    let o = step(a.yx, a.xy);
+    let b = a - o + K2;
+    let c = a - 1.0 + 2.0 * K2;
+    let h = max(0.5 - vec3(dot(a, a), dot(b, b), dot(c, c)), vec3(0.));
+    let n = h * h * h * h * vec3(dot(a, hash(i + 0.0)), dot(b, hash(i + o)), dot(c, hash(i + 1.0)));
+    return dot(n, vec3(70.0));
 }
 
 fn history_color(tex_coords: vec2<f32>, lookup: vec4<f32>) -> vec4<f32> {
@@ -91,7 +140,7 @@ fn gamma_correct(c: f32) -> f32 {
     return select(12.92 * c, 1.055 * pow(c, 1.0 / 2.4) - 0.055, c > 0.0031308);
 }
 
-fn oklch_to_srgb(oklch: vec3<f32>) -> vec3<f32> {
+fn oklch_to_lin(oklch: vec3<f32>) -> vec3<f32> {
     // Unpack input
     let L = oklch.x;
     let C = oklch.y;
@@ -116,12 +165,15 @@ fn oklch_to_srgb(oklch: vec3<f32>) -> vec3<f32> {
         -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * s,
     );
 
+    return rgb_linear;
     // 3. linear sRGB -> non-linear sRGB
-    return vec3<f32>(
-        gamma_correct(rgb_linear.x),
-        gamma_correct(rgb_linear.y),
-        gamma_correct(rgb_linear.z)
-    );
+    // If I convert to sRGB here, the color of the paper doesn't match what I
+    // picked. Is nannou converting later?
+    // return vec3<f32>(
+        // gamma_correct(rgb_linear.x),
+        // gamma_correct(rgb_linear.y),
+        // gamma_correct(rgb_linear.z)
+    // );
 }
 
 const num_grad_stops: u32 = 4u;
@@ -139,5 +191,5 @@ fn gradient(pos: f32) -> vec3<f32> {
     let i = u32(pos_mul);
     let j = min(i + 1u, num_grad_stops - 1u);
     let color = mix(grad_stops[i], grad_stops[j], t);
-    return oklch_to_srgb(color);
+    return oklch_to_lin(color);
 }

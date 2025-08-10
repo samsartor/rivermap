@@ -23,7 +23,7 @@ impl Node {
         let right = heightmap.get(self.loc + vec2(0.0, 1.0));
         let grad = -vec2(up - down, right - left);
         //self.loc += (self.tangent * 0.0 + -self.bitangent * 0.0 + grad * 35.0)
-        self.loc += (self.tangent * 3.0 + -self.bitangent * 7.0 + grad * 35.0)
+        self.loc += (self.tangent * 5.0 + -self.bitangent * 5.0 + grad * 35.0)
             * (update.since_last.as_secs_f32() - SLOWDOWN)
             * 3.0;
     }
